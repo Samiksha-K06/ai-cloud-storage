@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.tmp
+*.log
+
+# Virtual environments
+venv/
+.env/
+env/
+.venv/
+ENV/
+
+# FastAPI / Uvicorn
+*.sqlite3
+*.db
+instance/
+*.pid
+
+# IDE / Editor settings
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Node / Frontend
+node_modules/
+dist/
+build/
+
+# Environment variables
+.env
+
+# PyCharm
+*.iml
+*.ipr
+*.iws
+
+# Others
+__MACOSX/
