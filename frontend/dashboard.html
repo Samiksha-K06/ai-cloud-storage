@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard | AI Cloud Storage</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container dashboard">
+    <h2>📁 My Files</h2>
+
+    <div class="controls">
+      <input type="file" id="fileInput" />
+      <button id="uploadBtn">Upload</button>
+      <button id="aiBtn">🧠 Analyze with Gemini</button>
+      <button id="logoutBtn" class="logout">Logout</button>
+    </div>
+
+    <h3>🧠 AI Summary</h3>
+    <pre id="aiOutput" class="ai-output"></pre>
+
+    <h3>📂 Files List</h3>
+    <table id="fileTable">
+      <thead>
+        <tr>
+          <th>Filename</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
