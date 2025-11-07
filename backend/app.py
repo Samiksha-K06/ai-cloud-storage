@@ -1,42 +1,37 @@
-# app.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import user_routes, file_routes, ai_routes
+from routes import file_routes, ai_routes, user_routes
 from dotenv import load_dotenv
-import google.generativeai as genai
 import os
+import google.generativeai as genai
 
-# --- Load Environment Variables ---
+# Load environment variables
 load_dotenv()
 
-# ✅ Configure Gemini API Key
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    raise ValueError("❌ Missing GEMINI_API_KEY in .env file")
-genai.configure(api_key=GEMINI_API_KEY)
+# Configure Gemini API
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# --- Initialize FastAPI app ---
+# Initialize FastAPI
 app = FastAPI(
-    title="AI Cloud Storage API (Gemini)",
-    description="Personal Cloud Storage with AI (Gemini) Organization",
+    title="AI Cloud Storage",
+    description="Personal Cloud Storage with Gemini AI Integration",
     version="1.0.0"
 )
 
-# --- CORS Middleware ---
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Add your frontend URL later
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- ROUTE IMPORTS ---
+# Include routers
 app.include_router(user_routes.router)
 app.include_router(file_routes.router)
 app.include_router(ai_routes.router)
 
-# --- Default Route ---
 @app.get("/")
-def home():
-    return {"message": "✅ AI Cloud Storage Backend (Gemini) is Running!"}
+def root():
+    return {"message": "Welcome to AI Cloud Storage API 🚀"}

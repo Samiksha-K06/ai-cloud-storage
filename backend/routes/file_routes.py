@@ -1,57 +1,65 @@
-# routes/file_routes.py
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from database import db
-import shutil
+from dotenv import load_dotenv
+import cloudinary
+import cloudinary.uploader
 import os
+import uuid
 
-# ✅ Define router FIRST
-router = APIRouter(
-    prefix="/files",
-    tags=["Files"]
-)
+router = APIRouter(prefix="/files", tags=["Files"])
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+load_dotenv()
 
-# --- Upload File ---
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # ✅ Upload file to Cloudinary
+        result = cloudinary.uploader.upload(file.file, resource_type="auto")
 
-        db.files.insert_one({
+        # ✅ Save file info to MongoDB
+        file_data = {
             "filename": file.filename,
-            "content_type": file.content_type
+            "url": result["secure_url"],
+            "public_id": result["public_id"]
+        }
+
+        inserted = db["files"].insert_one(file_data)
+
+        # ✅ Convert ObjectId to string before returning
+        return JSONResponse({
+            "message": "File uploaded successfully",
+            "file_id": str(inserted.inserted_id),
+            "file_url": result["secure_url"]
         })
 
-        return {"message": f"✅ File '{file.filename}' uploaded successfully!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- List Files ---
+# ✅ File List
 @router.get("/list")
-def list_files():
-    files = list(db.files.find({}, {"_id": 0}))
-    return {"files": files}
+async def list_files():
+    try:
+        files = list(db.files.find({}, {"_id": 0}))
+        return {"files": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-# --- Download File ---
-@router.get("/download/{filename}")
-def download_file(filename: str):
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path, media_type="application/octet-stream", filename=filename)
 
-# --- Delete File ---
-@router.delete("/delete/{filename}")
-def delete_file(filename: str):
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        db.files.delete_one({"filename": filename})
-        return {"message": f"🗑️ File '{filename}' deleted successfully!"}
-    else:
-        raise HTTPException(status_code=404, detail="File not found")
+# ✅ Delete File
+@router.delete("/delete/{public_id}")
+async def delete_file(public_id: str):
+    try:
+        # Get file type from DB
+        file_record = db.files.find_one({"public_id": public_id})
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        resource_type = file_record.get("resource_type", "raw")
+
+        cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+        db.files.delete_one({"public_id": public_id})
+
+        return {"message": "🗑️ File deleted successfully!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

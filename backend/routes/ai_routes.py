@@ -1,109 +1,53 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-import google.generativeai as genai
+# routes/ai_routes.py
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from dotenv import load_dotenv
+import google.generativeai as genai
 import os
 import fitz  # PyMuPDF
 import docx
-from io import BytesIO
 
-# Load environment variables
+# Load .env variables
 load_dotenv()
 
 # Configure Gemini API
-api_key = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=api_key)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-router = APIRouter(
-    prefix="/ai",
-    tags=["AI"]
-)
+router = APIRouter(prefix="/ai", tags=["AI"])
 
+# ✅ Use stable working model from your list
+MODEL = "models/gemini-2.5-flash"
 
-# ✅ Helper: Extract text safely from TXT, PDF, DOCX
-def extract_text_from_file(file: UploadFile) -> str:
-    file_ext = file.filename.split(".")[-1].lower()
-    file_bytes = file.file.read()
-
-    if file_ext == "txt":
-        return file_bytes.decode("utf-8", errors="ignore")
-
-    elif file_ext == "pdf":
-        text = ""
-        with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-            for page in doc:
-                text += page.get_text()
-        return text
-
-    elif file_ext == "docx":
-        doc = docx.Document(BytesIO(file_bytes))
-        return "\n".join(p.text for p in doc.paragraphs)
-
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported file type. Please upload .txt, .pdf, or .docx."
-        )
-
-
-# 🧠 1️⃣ Basic test route
-@router.get("/analyze")
-async def analyze_text():
+def extract_text(file: UploadFile):
+    """Extract text from PDF, DOCX, or TXT."""
     try:
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
-        response = model.generate_content("Summarize this file: Sample text content.")
-        return {"ai_response": response.text}
+        if file.filename.endswith(".pdf"):
+            doc = fitz.open(stream=file.file.read(), filetype="pdf")
+            text = " ".join(page.get_text("text") for page in doc)
+        elif file.filename.endswith(".docx"):
+            doc = docx.Document(file.file)
+            text = " ".join(p.text for p in doc.paragraphs)
+        elif file.filename.endswith(".txt"):
+            text = file.file.read().decode("utf-8")
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+        return text.strip()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Text extraction failed: {str(e)}")
 
-
-# 💬 2️⃣ Analyze raw text directly
-@router.post("/analyze_text")
-async def analyze_custom_text(text: str = Form(...)):
-    try:
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
-        response = model.generate_content(f"Summarize this text:\n{text}")
-        return {"summary": response.text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# 📄 3️⃣ Analyze uploaded file (TXT / PDF / DOCX)
 @router.post("/analyze_file")
 async def analyze_file(file: UploadFile = File(...)):
+    """Summarize the uploaded document using Gemini."""
     try:
-        text = extract_text_from_file(file)
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="File appears to be empty.")
+        text = extract_text(file)
+        if not text:
+            raise HTTPException(status_code=400, detail="No readable text found in file.")
 
-        # Limit text to 4000 characters (Gemini context limit safety)
-        text_chunk = text[:4000]
+        model = genai.GenerativeModel(MODEL)
+        prompt = f"Summarize this document concisely for a quick overview:\n{text[:8000]}"
+        response = model.generate_content(prompt)
 
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
-        response = model.generate_content(f"Summarize this document:\n\n{text_chunk}")
-
-
-        # ✅ Extract summary safely
-        summary = None
-        try:
-            if hasattr(response, "text") and response.text:
-                summary = response.text.strip()
-            elif response.candidates and len(response.candidates) > 0:
-                candidate = response.candidates[0]
-                if hasattr(candidate, "content") and hasattr(candidate.content, "parts"):
-                    parts = candidate.content.parts
-                    summary = "".join([p.text for p in parts if hasattr(p, "text")]).strip()
-        except Exception as e:
-            print("⚠️ Error extracting summary:", e)
-            summary = None
-
-        # 🧩 Fallback
-        if not summary or summary.strip() == "":
-            summary = f"(Fallback summary) The document '{file.filename}' contains approximately {len(text.split())} words."
-
-        return {
-            "filename": file.filename,
-            "summary": summary
-        }
+        summary = response.text.strip() if hasattr(response, "text") else "No summary generated."
+        return {"summary": summary}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
