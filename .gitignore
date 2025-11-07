@@ -42,3 +42,6 @@ build/
 
 # Others
 __MACOSX/
+
+# Upload folders
+uploads/
